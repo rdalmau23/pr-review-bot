@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: bitnami/postgresql:latest
+    container_name: prbot-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRESQL_USERNAME: prbot
+      POSTGRESQL_PASSWORD: prbot_secret
+      POSTGRESQL_DATABASE: pr_review_bot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: prbot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:

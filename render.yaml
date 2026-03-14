@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: pr-bot-api
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run db:push && npm run start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pr-bot-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: pr-bot-redis
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+
+databases:
+  - name: pr-bot-db
+    databaseName: pr_review_bot
+    user: prbot
+    plan: free
+
+  - type: redis
+    name: pr-bot-redis
+    plan: free

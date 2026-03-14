@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+/dist
+/build
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Prisma
+/src/generated/prisma
+.prisma/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+.vscode/
+.idea/
+.serverless/
+.fusebox/
+.next/

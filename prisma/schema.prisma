@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Installation {
+  id                   String         @id @default(uuid())
+  githubInstallationId Int            @unique @map("github_installation_id")
+  slackTeamId          String         @map("slack_team_id")
+  slackBotToken        String         @map("slack_bot_token")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  repositories  Repository[]
+  userMappings  UserMapping[]
+  teamConfigs   TeamConfig[]
+
+  @@map("installations")
+}
+
+model Repository {
+  id               String         @id @default(uuid())
+  installationId   String         @map("installation_id")
+  githubRepoId     Int            @unique @map("github_repo_id")
+  fullName         String         @map("full_name")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  installation  Installation    @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  pullRequests  PullRequest[]
+
+  @@map("repositories")
+}
+
+model PullRequest {
+  id                  String          @id @default(uuid())
+  repositoryId        String          @map("repository_id")
+  githubPrNumber      Int             @map("github_pr_number")
+  title               String
+  authorGithubLogin   String          @map("author_github_login")
+  state               PullRequestState @default(OPEN)
+  changedFilesCount   Int             @default(0) @map("changed_files_count")
+  labels              String[]        @default([])
+  htmlUrl             String          @map("html_url")
+  isDraft             Boolean         @default(false) @map("is_draft")
+  openedAt            DateTime        @map("opened_at")
+  closedAt            DateTime?       @map("closed_at")
+  lastNotifiedAt      DateTime?       @map("last_notified_at")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  repository      Repository       @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  reviewRequests  ReviewRequest[]
+
+  @@unique([repositoryId, githubPrNumber])
+  @@map("pull_requests")
+}
+
+model ReviewRequest {
+  id                    String              @id @default(uuid())
+  pullRequestId         String              @map("pull_request_id")
+  reviewerGithubLogin   String              @map("reviewer_github_login")
+  status                ReviewStatus        @default(PENDING)
+  requestedAt           DateTime            @default(now()) @map("requested_at")
+  completedAt           DateTime?           @map("completed_at")
+
+  pullRequest  PullRequest  @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([pullRequestId, reviewerGithubLogin])
+  @@map("review_requests")
+}
+
+model UserMapping {
+  id              String       @id @default(uuid())
+  installationId  String       @map("installation_id")
+  githubLogin     String       @map("github_login")
+  slackUserId     String       @map("slack_user_id")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  installation  Installation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@unique([installationId, githubLogin])
+  @@map("user_mappings")
+}
+
+model TeamConfig {
+  id                   String       @id @default(uuid())
+  installationId       String       @map("installation_id")
+  slackChannelId       String       @map("slack_channel_id")
+  staleThresholdHours  Int          @default(24) @map("stale_threshold_hours")
+  digestCron           String       @default("0 9 * * 1-5") @map("digest_cron")
+  timezone             String       @default("UTC")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  installation  Installation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@unique([installationId, slackChannelId])
+  @@map("team_configs")
+}
+
+enum PullRequestState {
+  OPEN
+  CLOSED
+  MERGED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  COMMENTED
+  DISMISSED
+}
