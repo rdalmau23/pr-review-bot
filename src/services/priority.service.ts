@@ -33,9 +33,7 @@ export function calculatePriority(pr: PullRequestWithReviews): number {
   }
 
   // Waiting time escalation
-  const waitingHours = Math.floor(
-    (Date.now() - pr.openedAt.getTime()) / (1000 * 60 * 60)
-  );
+  const waitingHours = Math.floor((Date.now() - pr.openedAt.getTime()) / (1000 * 60 * 60));
   if (waitingHours > 48) {
     score += 20;
   } else if (waitingHours > 24) {

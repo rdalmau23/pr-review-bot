@@ -12,7 +12,7 @@ export function createGitHubClient(installationId?: number): Octokit {
     return new Octokit();
   }
 
-  const authArgs = installationId 
+  const authArgs = installationId
     ? {
         appId: config.github.appId,
         privateKey: config.github.privateKey,
@@ -38,11 +38,7 @@ export function createGitHubClient(installationId?: number): Octokit {
 /**
  * Fetches open pull requests for a given repository.
  */
-export async function fetchOpenPullRequests(
-  octokit: Octokit,
-  owner: string,
-  repo: string
-) {
+export async function fetchOpenPullRequests(octokit: Octokit, owner: string, repo: string) {
   const { data } = await octokit.pulls.list({
     owner,
     repo,

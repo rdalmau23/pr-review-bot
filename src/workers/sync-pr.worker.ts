@@ -2,7 +2,11 @@ import { Queue, Worker } from 'bullmq';
 import { config } from '../config';
 import { prisma } from '../db/client';
 import { logger } from '../utils/logger';
-import { createGitHubClient, fetchOpenPullRequests, fetchPullRequest } from '../integrations/github';
+import {
+  createGitHubClient,
+  fetchOpenPullRequests,
+  fetchPullRequest,
+} from '../integrations/github';
 import { upsertPullRequest } from '../services/pr.service';
 
 const connection = { url: config.redis.url };
@@ -30,10 +34,10 @@ export const syncPrWorker = new Worker(
       for (const repo of installation.repositories) {
         try {
           const [owner, name] = repo.fullName.split('/');
-          
+
           // 1. Fetch all open PRs from GitHub API
           const openPrs = await fetchOpenPullRequests(octokit, owner, name);
-          const openPrNumbers = new Set(openPrs.map(pr => pr.number));
+          const openPrNumbers = new Set(openPrs.map((pr) => pr.number));
 
           // 2. Upsert fetched open PRs into our database
           for (const pr of openPrs) {
@@ -62,8 +66,12 @@ export const syncPrWorker = new Worker(
               // It's no longer open. Fetch exact state to see if closed or merged.
               try {
                 const prDetail = await fetchPullRequest(octokit, owner, name, dbPr.githubPrNumber);
-                const newState = prDetail.merged ? 'MERGED' : (prDetail.state === 'closed' ? 'CLOSED' : 'OPEN');
-                
+                const newState = prDetail.merged
+                  ? 'MERGED'
+                  : prDetail.state === 'closed'
+                    ? 'CLOSED'
+                    : 'OPEN';
+
                 if (newState !== 'OPEN') {
                   await upsertPullRequest({
                     repositoryId: repo.id,
@@ -81,11 +89,12 @@ export const syncPrWorker = new Worker(
                   logger.info(`Synced PR #${dbPr.githubPrNumber} state to ${newState}`);
                 }
               } catch (detailError) {
-                logger.error(`Failed to fetch specific PR #${dbPr.githubPrNumber} for sync`, { error: detailError });
+                logger.error(`Failed to fetch specific PR #${dbPr.githubPrNumber} for sync`, {
+                  error: detailError,
+                });
               }
             }
           }
-
         } catch (error) {
           logger.error(`Failed to sync repository ${repo.fullName}`, { error });
         }

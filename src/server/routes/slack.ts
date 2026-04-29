@@ -193,7 +193,10 @@ async function handleConfig(command: any, args: string[], respond: any): Promise
     case 'threshold': {
       const hours = parseInt(value, 10);
       if (isNaN(hours) || hours < 1) {
-        await respond({ text: '⚠️ Threshold must be a positive number of hours.', response_type: 'ephemeral' });
+        await respond({
+          text: '⚠️ Threshold must be a positive number of hours.',
+          response_type: 'ephemeral',
+        });
         return;
       }
       await prisma.teamConfig.upsert({

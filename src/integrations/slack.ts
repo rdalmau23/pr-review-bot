@@ -11,9 +11,7 @@ export const slackApp = new App({
   token: config.slack.botToken || 'xoxb-dummy-token',
   signingSecret: config.slack.signingSecret || 'dummy-signing-secret',
   tokenVerificationEnabled: !!config.slack.botToken && config.slack.botToken !== 'xoxb-dummy-token',
-  ...(config.slack.appToken
-    ? { socketMode: true, appToken: config.slack.appToken }
-    : {}),
+  ...(config.slack.appToken ? { socketMode: true, appToken: config.slack.appToken } : {}),
   logLevel: config.env === 'production' ? LogLevel.INFO : LogLevel.DEBUG,
 });
 

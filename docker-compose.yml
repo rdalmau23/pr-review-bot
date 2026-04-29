@@ -3,7 +3,7 @@ services:
     image: bitnami/postgresql:latest
     container_name: prbot-postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRESQL_USERNAME: prbot
       POSTGRESQL_PASSWORD: prbot_secret

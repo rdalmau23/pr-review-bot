@@ -40,7 +40,9 @@ export const workloadWorker = new Worker(
               text:
                 '⚠️ *Reviewer Workload Imbalance Detected*\n\n' +
                 workload
-                  .map((w) => `• *${w.reviewer}*: ${w.count} pending review${w.count > 1 ? 's' : ''}`)
+                  .map(
+                    (w) => `• *${w.reviewer}*: ${w.count} pending review${w.count > 1 ? 's' : ''}`
+                  )
                   .join('\n') +
                 '\n\nConsider redistributing reviews for faster turnaround.',
             },

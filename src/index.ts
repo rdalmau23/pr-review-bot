@@ -20,7 +20,7 @@ async function main(): Promise<void> {
 
   // 2. Register Slack command handlers and start the Slack app
   registerSlackHandlers();
-  
+
   // Only start Slack listener if we have a token and it's either socket mode OR we want a separate server
   // For local testing without a real Slack app, we skip this to avoid port 3000 conflicts with Express
   const isSlackConfigured = config.slack.botToken && config.slack.botToken !== 'xoxb-dummy-token';
