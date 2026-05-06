@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     buildCommand: npm install && npm run build
-    startCommand: npm run db:push && npm run start
+    startCommand: npm run db:deploy && npm run start
     envVars:
       - key: DATABASE_URL
         fromDatabase:

@@ -73,9 +73,7 @@ export async function getStalePullRequests(
       state: 'OPEN',
       isDraft: false,
       openedAt: { lte: thresholdDate },
-      ...(installationId
-        ? { repository: { installationId } }
-        : {}),
+      ...(installationId ? { repository: { installationId } } : {}),
     },
     include: { reviewRequests: true },
     orderBy: { openedAt: 'asc' },

@@ -1,11 +1,7 @@
 import { PullRequest, ReviewRequest } from '.prisma/client';
 import { sendDirectMessage, sendChannelMessage } from '../integrations/slack';
 import { formatDuration, hoursAgo } from '../utils/time';
-import {
-  calculatePriority,
-  getPriorityTier,
-  sortByPriority,
-} from './priority.service';
+import { getPriorityTier, sortByPriority } from './priority.service';
 
 type PullRequestWithReviews = PullRequest & { reviewRequests: ReviewRequest[] };
 
@@ -48,10 +44,7 @@ export async function notifyReviewer(
 /**
  * Sends a stale PR alert to a Slack channel.
  */
-export async function notifyStalePR(
-  channelId: string,
-  pr: PullRequest
-): Promise<void> {
+export async function notifyStalePR(channelId: string, pr: PullRequest): Promise<void> {
   const waiting = formatDuration(hoursAgo(pr.openedAt));
 
   const blocks = [
@@ -64,11 +57,7 @@ export async function notifyStalePR(
     },
   ];
 
-  await sendChannelMessage(
-    channelId,
-    blocks,
-    `PR waiting for review (${waiting}): ${pr.title}`
-  );
+  await sendChannelMessage(channelId, blocks, `PR waiting for review (${waiting}): ${pr.title}`);
 }
 
 /**
@@ -89,8 +78,7 @@ export async function sendDigest(
     (pr) => hoursAgo(pr.openedAt) > 24 && getPriorityTier(pr.priorityScore) !== 'high'
   );
   const normal = sorted.filter(
-    (pr) =>
-      getPriorityTier(pr.priorityScore) !== 'high' && hoursAgo(pr.openedAt) <= 24
+    (pr) => getPriorityTier(pr.priorityScore) !== 'high' && hoursAgo(pr.openedAt) <= 24
   );
 
   const blocks: any[] = [
@@ -183,9 +171,5 @@ export async function sendDigest(
     ],
   });
 
-  await sendChannelMessage(
-    channelId,
-    blocks,
-    `PR Review Digest: ${prs.length} open PRs`
-  );
+  await sendChannelMessage(channelId, blocks, `PR Review Digest: ${prs.length} open PRs`);
 }

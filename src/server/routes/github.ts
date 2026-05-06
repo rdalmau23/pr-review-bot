@@ -18,7 +18,7 @@ function verifySignature(payload: Buffer, signature: string | undefined): boolea
     .createHmac('sha256', config.github.webhookSecret)
     .update(payload)
     .digest('hex')}`;
-  
+
   const signatureBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expected);
 
@@ -85,11 +85,7 @@ async function handlePullRequestEvent(payload: any): Promise<void> {
   });
 
   // Map GitHub PR state to our enum
-  const state = pr.merged
-    ? 'MERGED'
-    : pr.state === 'closed'
-      ? 'CLOSED'
-      : 'OPEN';
+  const state = pr.merged ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN';
 
   const savedPr = await upsertPullRequest({
     repositoryId: repo.id,

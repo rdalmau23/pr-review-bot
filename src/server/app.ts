@@ -10,11 +10,13 @@ export function createApp(): express.Application {
 
   // Parse JSON bodies (needed for GitHub webhooks)
   // We capture the raw body buffer for signature verification
-  app.use(express.json({
-    verify: (req: any, _res, buf) => {
-      req.rawBody = buf;
-    }
-  }));
+  app.use(
+    express.json({
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    })
+  );
 
   // Health check
   app.get('/health', (_req, res) => {
