@@ -6,6 +6,7 @@ import { getOpenPullRequests } from '../../services/pr.service';
 import { sendDigest } from '../../services/notification.service';
 import { formatDuration, hoursAgo } from '../../utils/time';
 import type { ReviewRequest, PullRequest } from '.prisma/client';
+import { getMostActiveReviewers, getFastestReviewers, getAverageTimeToMerge } from '../../services/stats.service';
 
 /**
  * Registers all Slack slash command and interaction handlers.
@@ -30,6 +31,9 @@ export function registerSlackHandlers(): void {
           break;
         case 'link':
           await handleLink(command, args, respond);
+          break;
+        case 'stats':
+          await handleStats(command, respond);
           break;
         case 'config':
           await handleConfig(command, args, respond);
@@ -254,11 +258,71 @@ async function handleConfig(command: any, args: string[], respond: any): Promise
 }
 
 /**
+ * /prbot stats — Show team gamification and analytics leaderboard.
+ */
+async function handleStats(command: any, respond: any): Promise<void> {
+  const installation = await prisma.installation.findFirst({
+    where: { slackTeamId: command.team_id },
+  });
+
+  if (!installation) {
+    await respond({
+      text: '⚠️ Bot is not configured for this workspace yet.',
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  const [activeReviewers, fastestReviewers, avgTimeToMerge] = await Promise.all([
+    getMostActiveReviewers(installation.id),
+    getFastestReviewers(installation.id),
+    getAverageTimeToMerge(installation.id),
+  ]);
+
+  let text = '🏆 *Team PR Analytics & Leaderboard* 🏆\n\n';
+
+  // 1. Time to Merge
+  if (avgTimeToMerge !== null) {
+    text += `📈 *Average Time-to-Merge:* \`${avgTimeToMerge.toFixed(1)} hours\`\n\n`;
+  } else {
+    text += `📈 *Average Time-to-Merge:* \`N/A\` (No merged PRs yet)\n\n`;
+  }
+
+  // 2. Most Active
+  text += '🦸 *Most Active Reviewers*\n';
+  if (activeReviewers.length > 0) {
+    activeReviewers.forEach((r, idx) => {
+      const medals = ['🥇', '🥈', '🥉'];
+      text += `${medals[idx] || '•'} *${r.reviewer}* — ${r.count} reviews\n`;
+    });
+  } else {
+    text += '> No completed reviews yet.\n';
+  }
+  text += '\n';
+
+  // 3. Fastest
+  text += '⚡ *Fastest Reviewers*\n';
+  if (fastestReviewers.length > 0) {
+    fastestReviewers.forEach((r, idx) => {
+      const medals = ['🥇', '🥈', '🥉'];
+      text += `${medals[idx] || '•'} *${r.reviewer}* — ${r.avgHours.toFixed(1)}h avg time\n`;
+    });
+  } else {
+    text += '> Not enough data to calculate speed.\n';
+  }
+
+  await respond({
+    text,
+    response_type: 'in_channel', // 'in_channel' to show off stats to the whole channel
+  });
+}
+
+/**
  * /prbot help — Show available commands.
  */
 async function handleHelp(respond: any): Promise<void> {
   await respond({
-    text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
+    text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot stats\` — Show team analytics leaderboard\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
     response_type: 'ephemeral',
   });
 }
