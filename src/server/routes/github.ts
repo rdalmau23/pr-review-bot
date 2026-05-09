@@ -5,6 +5,8 @@ import { prisma } from '../../db/client';
 import { logger } from '../../utils/logger';
 import { upsertPullRequest, markNotified } from '../../services/pr.service';
 import { upsertReviewRequest, getSlackUserForGithub } from '../../services/reviewer.service';
+import { createGitHubClient, createIssueComment } from '../../integrations/github';
+import { getUserStatus } from '../../integrations/slack';
 import { notifyReviewer } from '../../services/notification.service';
 
 export const githubRouter = Router();
@@ -120,8 +122,28 @@ async function handlePullRequestEvent(payload: any): Promise<void> {
           reviewer.login
         );
         if (slackUserId) {
-          await notifyReviewer(installRecord.slackBotToken, slackUserId, savedPr, pr.user.login);
-          await markNotified(savedPr.id);
+          const status = await getUserStatus(slackUserId);
+          const isOoo =
+            status &&
+            (status.emoji.includes('palm_tree') ||
+              status.emoji.includes('face_with_thermometer') ||
+              status.emoji.includes('hospital') ||
+              /ooo|vacation|out of office/i.test(status.text));
+
+          if (isOoo) {
+            logger.info(`Reviewer ${reviewer.login} is OOO. Commenting on PR.`);
+            const octokit = createGitHubClient(installRecord.githubInstallationId || undefined);
+            await createIssueComment(
+              octokit,
+              repository.owner.login,
+              repository.name,
+              pr.number,
+              `⚠️ **Notice**: @${pr.user.login}, it looks like @${reviewer.login} is currently Out of Office (\`${status.text} ${status.emoji}\`). You might want to assign someone else for a faster review.`
+            );
+          } else {
+            await notifyReviewer(installRecord.slackBotToken, slackUserId, savedPr, pr.user.login);
+            await markNotified(savedPr.id);
+          }
         }
       }
     }
