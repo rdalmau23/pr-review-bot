@@ -21,9 +21,12 @@ export const config = {
   },
 
   slack: {
-    botToken: process.env.SLACK_BOT_TOKEN!,
+    botToken: process.env.SLACK_BOT_TOKEN,
     signingSecret: process.env.SLACK_SIGNING_SECRET!,
     appToken: process.env.SLACK_APP_TOKEN,
+    clientId: process.env.SLACK_CLIENT_ID || 'dummy-client-id',
+    clientSecret: process.env.SLACK_CLIENT_SECRET || 'dummy-client-secret',
+    stateSecret: process.env.SLACK_STATE_SECRET || 'pr-bot-state-secret',
   },
 
   defaults: {

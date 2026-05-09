@@ -1,4 +1,5 @@
 import express from 'express';
+import { slackReceiver } from '../integrations/slack';
 import { githubRouter } from './routes/github';
 import { logger } from '../utils/logger';
 
@@ -25,6 +26,9 @@ export function createApp(): express.Application {
 
   // GitHub webhook endpoint
   app.use('/webhooks/github', githubRouter);
+
+  // Mount Slack Receiver (handles /slack/events, /slack/install, /slack/oauth_redirect)
+  app.use(slackReceiver.router);
 
   // Request logging middleware
   app.use((req, _res, next) => {
