@@ -5,7 +5,6 @@ import { linkUser, getReviewerWorkload, getSlackUserForGithub } from '../../serv
 import { getOpenPullRequests } from '../../services/pr.service';
 import { sendDigest } from '../../services/notification.service';
 import { formatDuration, hoursAgo } from '../../utils/time';
-import type { ReviewRequest, PullRequest } from '.prisma/client';
 import { sendDirectMessage } from '../../integrations/slack';
 
 /**
@@ -47,14 +46,45 @@ export function registerSlackHandlers(): void {
       logger.error('Error handling /prbot command', { error, subcommand });
       await respond({
         text: '❌ Something went wrong. Please try again.',
-        response_type: 'ephemeral',
       });
+    }
+  });
+  // ────────────────────────────────────────────
+  // Action handlers
+  // ────────────────────────────────────────────
+  slackApp.action('nudge_reviewers', async ({ ack, body, action, respond }) => {
+    await ack();
+    
+    // action.value will contain the PR number
+    const prNumber = parseInt((action as any).value, 10);
+    const slackUserId = body.user.id;
+
+    // Use handleNudge logic internally
+    const commandMock = {
+      team_id: (body as any).team.id,
+      user_id: slackUserId,
+    };
+    
+    const argsMock = ['nudge', prNumber.toString()];
+    
+    // We need a custom respond for the action context
+    const actionRespond = async (msg: any) => {
+      await respond({
+        ...msg,
+        replace_original: false, // Keep the status message
+      });
+    };
+
+    try {
+      await handleNudge(commandMock, argsMock, actionRespond);
+    } catch (error) {
+      logger.error('Error handling nudge action', { error, prNumber });
     }
   });
 }
 
 /**
- * /prbot status — Show the user's pending reviews.
+ * /prbot status — Show the user's pending reviews and their own open PRs.
  */
 async function handleStatus(command: any, respond: any): Promise<void> {
   const slackUserId = command.user_id;
@@ -72,7 +102,7 @@ async function handleStatus(command: any, respond: any): Promise<void> {
     return;
   }
 
-  // Find pending reviews
+  // 1. Find reviews I owe
   const pendingReviews = await prisma.reviewRequest.findMany({
     where: {
       reviewerGithubLogin: mapping.githubLogin,
@@ -85,23 +115,98 @@ async function handleStatus(command: any, respond: any): Promise<void> {
     orderBy: { requestedAt: 'asc' },
   });
 
+  // 2. Find my own open PRs
+  const myOpenPrs = await prisma.pullRequest.findMany({
+    where: {
+      authorGithubLogin: mapping.githubLogin,
+      state: 'OPEN',
+    },
+    include: {
+      reviewRequests: {
+        where: { status: 'PENDING' },
+      },
+    },
+    orderBy: { openedAt: 'desc' },
+  });
+
+  const blocks: any[] = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: '📊 PR Bot Status', emoji: true },
+    },
+  ];
+
+  // Section: Reviews I owe
+  blocks.push({
+    type: 'section',
+    text: { type: 'mrkdwn', text: '*📥 Reviews I Owe*' },
+  });
+
   if (pendingReviews.length === 0) {
-    await respond({
-      text: '✅ You have no pending reviews. Nice!',
-      response_type: 'ephemeral',
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: '_You have no pending reviews. Nice!_ ☕' },
     });
-    return;
+  } else {
+    pendingReviews.forEach((r: any) => {
+      const age = formatDuration(hoursAgo(r.requestedAt));
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `• <${r.pullRequest.htmlUrl}|${r.pullRequest.title}> (#${r.pullRequest.githubPrNumber})\n> _Waiting ${age}_`,
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Review', emoji: true },
+          url: r.pullRequest.htmlUrl,
+          action_id: 'open_review_url',
+        },
+      });
+    });
   }
 
-  const reviewList = pendingReviews
-    .map((r: ReviewRequest & { pullRequest: PullRequest }) => {
-      const age = formatDuration(hoursAgo(r.requestedAt));
-      return `• <${r.pullRequest.htmlUrl}|${r.pullRequest.title}> (#${r.pullRequest.githubPrNumber}) — waiting ${age}`;
-    })
-    .join('\n');
+  blocks.push({ type: 'divider' });
+
+  // Section: My Open PRs
+  blocks.push({
+    type: 'section',
+    text: { type: 'mrkdwn', text: '*📤 My Open PRs*' },
+  });
+
+  if (myOpenPrs.length === 0) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: '_You have no open PRs._' },
+    });
+  } else {
+    myOpenPrs.forEach((pr: any) => {
+      const pendingCount = pr.reviewRequests.length;
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `• <${pr.htmlUrl}|${pr.title}> (#${pr.githubPrNumber})\n> _${pendingCount} pending reviewer(s)_`,
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: '👉 Nudge', emoji: true },
+          value: pr.githubPrNumber.toString(),
+          action_id: 'nudge_reviewers',
+          style: pendingCount > 0 ? 'primary' : undefined,
+          confirm: pendingCount > 0 ? {
+            title: { type: 'plain_text', text: 'Are you sure?' },
+            text: { type: 'mrkdwn', text: `This will send a reminder to all ${pendingCount} pending reviewers.` },
+            confirm: { type: 'plain_text', text: 'Yes, nudge them' },
+            deny: { type: 'plain_text', text: 'Cancel' },
+          } : undefined,
+        },
+      });
+    });
+  }
 
   await respond({
-    text: `📋 *Your Pending Reviews (${pendingReviews.length})*\n\n${reviewList}`,
+    blocks,
     response_type: 'ephemeral',
   });
 }
