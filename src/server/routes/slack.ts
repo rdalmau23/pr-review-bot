@@ -513,7 +513,6 @@ async function handleStats(command: any, respond: any): Promise<void> {
     return;
   }
 
-<<<<<<< HEAD
   const pr = await prisma.pullRequest.findFirst({
     where: {
       githubPrNumber: prNumber,
@@ -586,6 +585,7 @@ async function handleStats(command: any, respond: any): Promise<void> {
       ];
 
       await sendDirectMessage(
+        installation.slackBotToken,
         slackUserId,
         blocks,
         `Friendly nudge for PR #${pr.githubPrNumber}: ${pr.title}`
@@ -597,7 +597,25 @@ async function handleStats(command: any, respond: any): Promise<void> {
   await respond({
     text: `✅ Sent a nudge to ${nudgedCount} pending reviewer(s) for PR #${pr.githubPrNumber}.`,
     response_type: 'ephemeral',
-=======
+  });
+}
+
+/**
+ * /prbot stats — Show team gamification and analytics leaderboard.
+ */
+async function handleStats(command: any, respond: any): Promise<void> {
+  const installation = await prisma.installation.findFirst({
+    where: { slackTeamId: command.team_id },
+  });
+
+  if (!installation || !installation.slackBotToken) {
+    await respond({
+      text: '⚠️ Bot is not configured for this workspace yet.',
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
   const [activeReviewers, fastestReviewers, avgTimeToMerge] = await Promise.all([
     getMostActiveReviewers(installation.id),
     getFastestReviewers(installation.id),
@@ -639,7 +657,6 @@ async function handleStats(command: any, respond: any): Promise<void> {
   await respond({
     text,
     response_type: 'in_channel', // 'in_channel' to show off stats to the whole channel
->>>>>>> feat/oauth-multitenant
   });
 }
 
@@ -648,11 +665,7 @@ async function handleStats(command: any, respond: any): Promise<void> {
  */
 async function handleHelp(respond: any): Promise<void> {
   await respond({
-<<<<<<< HEAD
-    text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot nudge <pr-number>\` — Send a reminder to pending reviewers\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
-=======
-    text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot stats\` — Show team analytics leaderboard\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
->>>>>>> feat/oauth-multitenant
+    text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot nudge <pr-number>\` — Send a reminder to pending reviewers\n• \`/prbot stats\` — Show team analytics leaderboard\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
     response_type: 'ephemeral',
   });
 }
