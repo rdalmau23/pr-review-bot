@@ -66,3 +66,21 @@ export async function fetchPullRequest(
 
   return data;
 }
+
+/**
+ * Creates a comment on an issue or pull request.
+ */
+export async function createIssueComment(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  body: string
+) {
+  await octokit.issues.createComment({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    body,
+  });
+}

@@ -130,3 +130,29 @@ export async function sendChannelMessage(
     throw error;
   }
 }
+
+/**
+ * Fetch a user's current status text and emoji from Slack.
+ */
+export async function getUserStatus(slackUserId: string): Promise<{ text: string; emoji: string } | null> {
+  if (!config.slack.botToken || config.slack.botToken === 'xoxb-dummy-token') {
+    return null;
+  }
+
+  try {
+    const response = await slackApp.client.users.profile.get({
+      user: slackUserId,
+    });
+    
+    if (response.profile) {
+      return {
+        text: response.profile.status_text || '',
+        emoji: response.profile.status_emoji || '',
+      };
+    }
+    return null;
+  } catch (error) {
+    logger.error(`Failed to fetch profile for Slack user ${slackUserId}`, { error });
+    return null;
+  }
+}
