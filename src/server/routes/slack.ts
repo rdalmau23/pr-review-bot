@@ -6,7 +6,6 @@ import { getOpenPullRequests } from '../../services/pr.service';
 import { sendDigest } from '../../services/notification.service';
 import { formatDuration, hoursAgo } from '../../utils/time';
 import { sendDirectMessage } from '../../integrations/slack';
-import type { ReviewRequest, PullRequest } from '.prisma/client';
 import { getMostActiveReviewers, getFastestReviewers, getAverageTimeToMerge } from '../../services/stats.service';
 
 /**
