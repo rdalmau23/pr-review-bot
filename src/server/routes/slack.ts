@@ -320,6 +320,13 @@ async function handleNudge(command: any, args: string[], respond: any): Promise<
     return;
   }
 
+  const NUDGE_GIFS = [
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHRreXFrZ3R2Yzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/jc2Mm29DkLCIU/giphy.gif', // Pablo Escobar
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHRreXFrZ3R2Yzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/GrUhLU9q3nyRG/giphy.gif', // Old man
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHRreXFrZ3R2Yzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/26n6WywWKAO8rYn9m/giphy.gif', // Eyes
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHRreXFrZ3R2Yzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKMGpxx6rZfXo5W/giphy.gif', // Waiting cat
+  ];
+
   let nudgedCount = 0;
   for (const reviewRequest of pr.reviewRequests) {
     const slackUserId = await getSlackUserForGithub(
@@ -328,6 +335,7 @@ async function handleNudge(command: any, args: string[], respond: any): Promise<
     );
 
     if (slackUserId) {
+      const randomGif = NUDGE_GIFS[Math.floor(Math.random() * NUDGE_GIFS.length)];
       const blocks = [
         {
           type: 'section',
@@ -335,6 +343,11 @@ async function handleNudge(command: any, args: string[], respond: any): Promise<
             type: 'mrkdwn',
             text: `👋 *Friendly Nudge!*\n\n<@${command.user_id}> gently reminds you to review:\n<${pr.htmlUrl}|${pr.title}> (#${pr.githubPrNumber})`,
           },
+        },
+        {
+          type: 'image',
+          image_url: randomGif,
+          alt_text: 'waiting',
         },
         {
           type: 'actions',
