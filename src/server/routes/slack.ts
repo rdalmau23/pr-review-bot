@@ -125,7 +125,15 @@ async function handleDigest(command: any, respond: any): Promise<void> {
   const prs = await getOpenPullRequests();
   const workload = await getReviewerWorkload(installation.id);
 
-  await sendDigest(command.channel_id, prs, workload);
+  if (!installation.slackBotToken) {
+    await respond({
+      text: '⚠️ Bot is not properly authenticated with Slack.',
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  await sendDigest(installation.slackBotToken, command.channel_id, prs, workload);
 
   await respond({
     text: '📋 Digest posted to this channel.',

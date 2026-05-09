@@ -27,12 +27,16 @@ export const digestWorker = new Worker(
       const prs = await getOpenPullRequests();
       const workload = await getReviewerWorkload(teamConfig.installationId);
 
-      await sendDigest(teamConfig.slackChannelId, prs, workload);
+      if (teamConfig.installation.slackBotToken) {
+        await sendDigest(teamConfig.installation.slackBotToken, teamConfig.slackChannelId, prs, workload);
 
-      logger.info(`Digest sent to channel ${teamConfig.slackChannelId}`, {
-        prCount: prs.length,
-        reviewerCount: workload.length,
-      });
+        logger.info(`Digest sent to channel ${teamConfig.slackChannelId}`, {
+          prCount: prs.length,
+          reviewerCount: workload.length,
+        });
+      } else {
+        logger.warn(`Skipping digest for channel ${teamConfig.slackChannelId} due to missing Slack token`);
+      }
     }
   },
   { connection }
