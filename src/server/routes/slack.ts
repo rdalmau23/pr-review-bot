@@ -1,11 +1,12 @@
 import { slackApp } from '../../integrations/slack';
 import { prisma } from '../../db/client';
 import { logger } from '../../utils/logger';
-import { linkUser, getReviewerWorkload } from '../../services/reviewer.service';
+import { linkUser, getReviewerWorkload, getSlackUserForGithub } from '../../services/reviewer.service';
 import { getOpenPullRequests } from '../../services/pr.service';
 import { sendDigest } from '../../services/notification.service';
 import { formatDuration, hoursAgo } from '../../utils/time';
 import type { ReviewRequest, PullRequest } from '.prisma/client';
+import { sendDirectMessage } from '../../integrations/slack';
 
 /**
  * Registers all Slack slash command and interaction handlers.
@@ -30,6 +31,9 @@ export function registerSlackHandlers(): void {
           break;
         case 'link':
           await handleLink(command, args, respond);
+          break;
+        case 'nudge':
+          await handleNudge(command, args, respond);
           break;
         case 'config':
           await handleConfig(command, args, respond);
@@ -254,11 +258,118 @@ async function handleConfig(command: any, args: string[], respond: any): Promise
 }
 
 /**
+ * /prbot nudge <pr-number> — Send a friendly nudge to pending reviewers.
+ */
+async function handleNudge(command: any, args: string[], respond: any): Promise<void> {
+  const prNumberStr = args[1];
+  if (!prNumberStr) {
+    await respond({
+      text: '⚠️ Usage: `/prbot nudge <pr-number>` (e.g. `/prbot nudge 42`)',
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  const prNumber = parseInt(prNumberStr.replace('#', ''), 10);
+  if (isNaN(prNumber)) {
+    await respond({
+      text: '⚠️ Invalid PR number.',
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  const installation = await prisma.installation.findFirst({
+    where: { slackTeamId: command.team_id },
+  });
+
+  if (!installation) {
+    await respond({
+      text: '⚠️ Bot is not configured for this workspace yet.',
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  const pr = await prisma.pullRequest.findFirst({
+    where: {
+      githubPrNumber: prNumber,
+      repository: { installationId: installation.id },
+      state: 'OPEN',
+    },
+    include: {
+      reviewRequests: {
+        where: { status: 'PENDING' },
+      },
+    },
+  });
+
+  if (!pr) {
+    await respond({
+      text: `⚠️ Open PR #${prNumber} not found.`,
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  if (pr.reviewRequests.length === 0) {
+    await respond({
+      text: `✅ PR #${prNumber} has no pending reviewers to nudge.`,
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  let nudgedCount = 0;
+  for (const reviewRequest of pr.reviewRequests) {
+    const slackUserId = await getSlackUserForGithub(
+      installation.id,
+      reviewRequest.reviewerGithubLogin
+    );
+
+    if (slackUserId) {
+      const blocks = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `👋 *Friendly Nudge!*\n\n<@${command.user_id}> gently reminds you to review:\n<${pr.htmlUrl}|${pr.title}> (#${pr.githubPrNumber})`,
+          },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '🔗 Open PR', emoji: true },
+              url: pr.htmlUrl,
+              action_id: 'open_pr',
+            },
+          ],
+        },
+      ];
+
+      await sendDirectMessage(
+        slackUserId,
+        blocks,
+        `Friendly nudge for PR #${pr.githubPrNumber}: ${pr.title}`
+      );
+      nudgedCount++;
+    }
+  }
+
+  await respond({
+    text: `✅ Sent a nudge to ${nudgedCount} pending reviewer(s) for PR #${pr.githubPrNumber}.`,
+    response_type: 'ephemeral',
+  });
+}
+
+/**
  * /prbot help — Show available commands.
  */
 async function handleHelp(respond: any): Promise<void> {
   await respond({
-    text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
+    text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot nudge <pr-number>\` — Send a reminder to pending reviewers\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
     response_type: 'ephemeral',
   });
 }
