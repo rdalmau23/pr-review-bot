@@ -6,6 +6,8 @@ import { getOpenPullRequests } from '../../services/pr.service';
 import { sendDigest } from '../../services/notification.service';
 import { formatDuration, hoursAgo } from '../../utils/time';
 import { sendDirectMessage } from '../../integrations/slack';
+import type { ReviewRequest, PullRequest } from '.prisma/client';
+import { getMostActiveReviewers, getFastestReviewers, getAverageTimeToMerge } from '../../services/stats.service';
 
 /**
  * Registers all Slack slash command and interaction handlers.
@@ -33,6 +35,9 @@ export function registerSlackHandlers(): void {
           break;
         case 'nudge':
           await handleNudge(command, args, respond);
+          break;
+        case 'stats':
+          await handleStats(command, respond);
           break;
         case 'config':
           await handleConfig(command, args, respond);
@@ -230,7 +235,15 @@ async function handleDigest(command: any, respond: any): Promise<void> {
   const prs = await getOpenPullRequests();
   const workload = await getReviewerWorkload(installation.id);
 
-  await sendDigest(command.channel_id, prs, workload);
+  if (!installation.slackBotToken) {
+    await respond({
+      text: '⚠️ Bot is not properly authenticated with Slack.',
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  await sendDigest(installation.slackBotToken, command.channel_id, prs, workload);
 
   await respond({
     text: '📋 Digest posted to this channel.',
@@ -363,6 +376,7 @@ async function handleConfig(command: any, args: string[], respond: any): Promise
 }
 
 /**
+/**
  * /prbot nudge <pr-number> — Send a friendly nudge to pending reviewers.
  */
 async function handleNudge(command: any, args: string[], respond: any): Promise<void> {
@@ -388,6 +402,109 @@ async function handleNudge(command: any, args: string[], respond: any): Promise<
     where: { slackTeamId: command.team_id },
   });
 
+  if (!installation || !installation.slackBotToken) {
+    await respond({
+      text: '⚠️ Bot is not configured for this workspace yet.',
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  const pr = await prisma.pullRequest.findFirst({
+    where: {
+      githubPrNumber: prNumber,
+      repository: { installationId: installation.id },
+      state: 'OPEN',
+    },
+    include: {
+      reviewRequests: {
+        where: { status: 'PENDING' },
+      },
+    },
+  });
+
+  if (!pr) {
+    await respond({
+      text: `⚠️ Open PR #${prNumber} not found.`,
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  if (pr.reviewRequests.length === 0) {
+    await respond({
+      text: `✅ PR #${prNumber} has no pending reviewers to nudge.`,
+      response_type: 'ephemeral',
+    });
+    return;
+  }
+
+  const NUDGE_GIFS = [
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHRreXFrZ3R2Yzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/jc2Mm29DkLCIU/giphy.gif', // Pablo Escobar
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHRreXFrZ3R2Yzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/GrUhLU9q3nyRG/giphy.gif', // Old man
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHRreXFrZ3R2Yzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/26n6WywWKAO8rYn9m/giphy.gif', // Eyes
+    'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHRreXFrZ3R2Yzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyYzh0Y2RreHlyJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/3o7TKMGpxx6rZfXo5W/giphy.gif', // Waiting cat
+  ];
+
+  let nudgedCount = 0;
+  for (const reviewRequest of pr.reviewRequests) {
+    const slackUserId = await getSlackUserForGithub(
+      installation.id,
+      reviewRequest.reviewerGithubLogin
+    );
+
+    if (slackUserId) {
+      const randomGif = NUDGE_GIFS[Math.floor(Math.random() * NUDGE_GIFS.length)];
+      const blocks = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `👋 *Friendly Nudge!*\n\n<@${command.user_id}> gently reminds you to review:\n<${pr.htmlUrl}|${pr.title}> (#${pr.githubPrNumber})`,
+          },
+        },
+        {
+          type: 'image',
+          image_url: randomGif,
+          alt_text: 'waiting',
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '🔗 Open PR', emoji: true },
+              url: pr.htmlUrl,
+              action_id: 'open_pr',
+            },
+          ],
+        },
+      ];
+
+      await sendDirectMessage(
+        installation.slackBotToken,
+        slackUserId,
+        blocks,
+        `Friendly nudge for PR #${pr.githubPrNumber}: ${pr.title}`
+      );
+      nudgedCount++;
+    }
+  }
+
+  await respond({
+    text: `✅ Sent a nudge to ${nudgedCount} pending reviewer(s) for PR #${pr.githubPrNumber}.`,
+    response_type: 'ephemeral',
+  });
+}
+
+/**
+ * /prbot stats — Show team gamification and analytics leaderboard.
+ */
+async function handleStats(command: any, respond: any): Promise<void> {
+  const installation = await prisma.installation.findFirst({
+    where: { slackTeamId: command.team_id },
+  });
+
   if (!installation) {
     await respond({
       text: '⚠️ Bot is not configured for this workspace yet.',
@@ -396,6 +513,7 @@ async function handleNudge(command: any, args: string[], respond: any): Promise<
     return;
   }
 
+<<<<<<< HEAD
   const pr = await prisma.pullRequest.findFirst({
     where: {
       githubPrNumber: prNumber,
@@ -479,6 +597,49 @@ async function handleNudge(command: any, args: string[], respond: any): Promise<
   await respond({
     text: `✅ Sent a nudge to ${nudgedCount} pending reviewer(s) for PR #${pr.githubPrNumber}.`,
     response_type: 'ephemeral',
+=======
+  const [activeReviewers, fastestReviewers, avgTimeToMerge] = await Promise.all([
+    getMostActiveReviewers(installation.id),
+    getFastestReviewers(installation.id),
+    getAverageTimeToMerge(installation.id),
+  ]);
+
+  let text = '🏆 *Team PR Analytics & Leaderboard* 🏆\n\n';
+
+  // 1. Time to Merge
+  if (avgTimeToMerge !== null) {
+    text += `📈 *Average Time-to-Merge:* \`${avgTimeToMerge.toFixed(1)} hours\`\n\n`;
+  } else {
+    text += `📈 *Average Time-to-Merge:* \`N/A\` (No merged PRs yet)\n\n`;
+  }
+
+  // 2. Most Active
+  text += '🦸 *Most Active Reviewers*\n';
+  if (activeReviewers.length > 0) {
+    activeReviewers.forEach((r, idx) => {
+      const medals = ['🥇', '🥈', '🥉'];
+      text += `${medals[idx] || '•'} *${r.reviewer}* — ${r.count} reviews\n`;
+    });
+  } else {
+    text += '> No completed reviews yet.\n';
+  }
+  text += '\n';
+
+  // 3. Fastest
+  text += '⚡ *Fastest Reviewers*\n';
+  if (fastestReviewers.length > 0) {
+    fastestReviewers.forEach((r, idx) => {
+      const medals = ['🥇', '🥈', '🥉'];
+      text += `${medals[idx] || '•'} *${r.reviewer}* — ${r.avgHours.toFixed(1)}h avg time\n`;
+    });
+  } else {
+    text += '> Not enough data to calculate speed.\n';
+  }
+
+  await respond({
+    text,
+    response_type: 'in_channel', // 'in_channel' to show off stats to the whole channel
+>>>>>>> feat/oauth-multitenant
   });
 }
 
@@ -487,7 +648,11 @@ async function handleNudge(command: any, args: string[], respond: any): Promise<
  */
 async function handleHelp(respond: any): Promise<void> {
   await respond({
+<<<<<<< HEAD
     text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot nudge <pr-number>\` — Send a reminder to pending reviewers\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
+=======
+    text: `*PR Review Bot Commands*\n\n• \`/prbot status\` — Show your pending reviews\n• \`/prbot stats\` — Show team analytics leaderboard\n• \`/prbot digest\` — Post a digest to this channel\n• \`/prbot link <github-username>\` — Link your GitHub account\n• \`/prbot config threshold <hours>\` — Set stale PR threshold\n• \`/prbot config channel <#channel>\` — Set digest channel\n• \`/prbot help\` — Show this message`,
+>>>>>>> feat/oauth-multitenant
     response_type: 'ephemeral',
   });
 }

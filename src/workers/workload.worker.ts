@@ -49,18 +49,21 @@ export const workloadWorker = new Worker(
           },
         ];
 
-        await sendChannelMessage(
-          teamConfig.slackChannelId,
-          blocks,
-          'Reviewer workload imbalance detected'
-        );
+        if (teamConfig.installation.slackBotToken) {
+          await sendChannelMessage(
+            teamConfig.installation.slackBotToken,
+            teamConfig.slackChannelId,
+            blocks,
+            'Reviewer workload imbalance detected'
+          );
 
-        logger.info('Workload imbalance alert sent', {
-          channel: teamConfig.slackChannelId,
-          maxReviewer: workload[0].reviewer,
-          maxCount,
-          minCount,
-        });
+          logger.info('Workload imbalance alert sent', {
+            channel: teamConfig.slackChannelId,
+            maxReviewer: workload[0].reviewer,
+            maxCount,
+            minCount,
+          });
+        }
       }
     }
   },

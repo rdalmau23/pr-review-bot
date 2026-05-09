@@ -110,18 +110,17 @@ async function handlePullRequestEvent(payload: any): Promise<void> {
       });
 
       // Try to DM the reviewer if they have a Slack mapping
-      const installationRecord = await prisma.repository.findUnique({
-        where: { id: repo.id },
-        select: { installationId: true },
+      const installRecord = await prisma.installation.findUnique({
+        where: { id: repo.installationId },
       });
 
-      if (installationRecord) {
+      if (installRecord && installRecord.slackBotToken) {
         const slackUserId = await getSlackUserForGithub(
-          installationRecord.installationId,
+          installRecord.id,
           reviewer.login
         );
         if (slackUserId) {
-          await notifyReviewer(slackUserId, savedPr, pr.user.login);
+          await notifyReviewer(installRecord.slackBotToken, slackUserId, savedPr, pr.user.login);
           await markNotified(savedPr.id);
         }
       }

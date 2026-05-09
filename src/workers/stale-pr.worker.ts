@@ -40,7 +40,11 @@ export const stalePrWorker = new Worker(
       logger.info(`Found ${prsToNotify.length} stale PRs for channel ${teamConfig.slackChannelId}`);
 
       for (const pr of prsToNotify) {
-        await notifyStalePR(teamConfig.slackChannelId, pr);
+        if (teamConfig.installation.slackBotToken) {
+          await notifyStalePR(teamConfig.installation.slackBotToken, teamConfig.slackChannelId, pr);
+        } else {
+          logger.warn(`Skipping stale PR alert for channel ${teamConfig.slackChannelId} due to missing Slack token`);
+        }
         await markNotified(pr.id);
       }
     }

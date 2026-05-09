@@ -9,6 +9,7 @@ type PullRequestWithReviews = PullRequest & { reviewRequests: ReviewRequest[] };
  * Sends a DM to a reviewer when they are assigned to a PR.
  */
 export async function notifyReviewer(
+  token: string,
   slackUserId: string,
   pr: PullRequest,
   authorGithubLogin: string
@@ -35,6 +36,7 @@ export async function notifyReviewer(
   ];
 
   await sendDirectMessage(
+    token,
     slackUserId,
     blocks,
     `Review requested: ${pr.title} (#${pr.githubPrNumber})`
@@ -44,7 +46,7 @@ export async function notifyReviewer(
 /**
  * Sends a stale PR alert to a Slack channel.
  */
-export async function notifyStalePR(channelId: string, pr: PullRequest): Promise<void> {
+export async function notifyStalePR(token: string, channelId: string, pr: PullRequest): Promise<void> {
   const waiting = formatDuration(hoursAgo(pr.openedAt));
 
   const blocks = [
@@ -57,13 +59,14 @@ export async function notifyStalePR(channelId: string, pr: PullRequest): Promise
     },
   ];
 
-  await sendChannelMessage(channelId, blocks, `PR waiting for review (${waiting}): ${pr.title}`);
+  await sendChannelMessage(token, channelId, blocks, `PR waiting for review (${waiting}): ${pr.title}`);
 }
 
 /**
  * Builds and sends a daily digest message to a Slack channel.
  */
 export async function sendDigest(
+  token: string,
   channelId: string,
   prs: PullRequestWithReviews[],
   workload: { reviewer: string; count: number }[]
@@ -171,5 +174,5 @@ export async function sendDigest(
     ],
   });
 
-  await sendChannelMessage(channelId, blocks, `PR Review Digest: ${prs.length} open PRs`);
+  await sendChannelMessage(token, channelId, blocks, `PR Review Digest: ${prs.length} open PRs`);
 }
